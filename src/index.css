@@ -1,0 +1,62 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color: #333333;
+  background: #fad4dd;
+  font-family: Manrope, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(255, 127, 165, 0.24), transparent 35%),
+    radial-gradient(circle at 80% 0%, rgba(244, 91, 140, 0.18), transparent 30%),
+    #fad4dd;
+  color: #333333;
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(10px);
+}
+
+.glass-strong {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.66));
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  box-shadow:
+    0 14px 38px rgba(244, 91, 140, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(14px);
+}
+
+.dashboard-pink-bg {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(255, 127, 165, 0.34), transparent 34%),
+    radial-gradient(circle at 88% 12%, rgba(244, 91, 140, 0.26), transparent 30%),
+    radial-gradient(circle at 50% 100%, rgba(230, 72, 122, 0.16), transparent 45%),
+    #f8d9e2;
+}
+
+.clinix-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.clinix-scrollbar::-webkit-scrollbar-thumb {
+  background: #f45b8c;
+  border-radius: 20px;
+}

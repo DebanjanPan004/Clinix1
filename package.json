@@ -1,0 +1,53 @@
+{
+  "name": "clinix1",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "server": "node server/index.js",
+    "dev:server": "node --watch server/index.js",
+    "db:setup": "node server/setupDatabase.js",
+    "ai:install": "py -3.9 -m venv .venv39 && .\\.venv39\\Scripts\\python.exe -m pip install --upgrade pip && .\\.venv39\\Scripts\\python.exe -m pip install -r ai-service/requirements.txt",
+    "ai:train": "set PYTHONNOUSERSITE=1&& .\\.venv39\\Scripts\\python.exe ai-service/no_show_pipeline.py",
+    "ai:serve": "set PYTHONNOUSERSITE=1&& .\\.venv39\\Scripts\\python.exe ai-service/app.py",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.5.0",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "framer-motion": "^12.38.0",
+    "gsap": "^3.14.2",
+    "jsonwebtoken": "^9.0.3",
+    "lucide-react": "^0.577.0",
+    "morgan": "^1.10.1",
+    "multer": "^2.1.1",
+    "pg": "^8.20.0",
+    "postprocessing": "^6.38.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-hot-toast": "^2.6.0",
+    "react-router-dom": "^7.13.1",
+    "three": "^0.183.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "autoprefixer": "^10.4.27",
+    "eslint": "^9.39.1",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "globals": "^16.5.0",
+    "postcss": "^8.5.8",
+    "tailwindcss": "^3.4.17",
+    "vite": "^7.3.1"
+  }
+}
