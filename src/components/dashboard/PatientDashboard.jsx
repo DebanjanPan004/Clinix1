@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useState } from 'react'
 import toast from 'react-hot-toast'
 import AppointmentsCard from './AppointmentsCard'
 import MedicineReminderCard from './MedicineReminderCard'
@@ -10,9 +11,11 @@ import useAppointments from '../../hooks/useAppointments'
 import useReminders from '../../hooks/useReminders'
 import useActivities from '../../hooks/useActivities'
 import { uploadReport } from '../../services/reportService'
+import { isAuthSessionError } from '../../utils/authSession'
 
 export default function PatientDashboard() {
   const patientId = useMemo(() => localStorage.getItem('clinix_patient_id'), [])
+  const [uploadingReport, setUploadingReport] = useState(false)
   const {
     appointments,
     loading: appointmentsLoading,
@@ -35,6 +38,17 @@ export default function PatientDashboard() {
   const loading = appointmentsLoading || remindersLoading || activitiesLoading
   const error = appointmentsError || remindersError || activitiesError
 
+  const doctorContacts = appointments
+    .map((appointment) => ({
+      name: appointment.doctor_name,
+      email: appointment.doctor_email,
+      phone: appointment.doctor_phone,
+    }))
+    .filter((contact, index, list) => {
+      const key = `${contact.email || ''}-${contact.phone || ''}-${contact.name || ''}`
+      return key !== '--' && list.findIndex((item) => `${item.email || ''}-${item.phone || ''}-${item.name || ''}` === key) === index
+    })
+
   const onToggleReminder = async (reminder) => {
     try {
       await toggleReminder(reminder)
@@ -45,6 +59,7 @@ export default function PatientDashboard() {
       })
       toast.success('Reminder updated')
     } catch (toggleError) {
+      if (isAuthSessionError(toggleError)) return
       toast.error(toggleError.message || 'Could not update reminder')
     }
   }
@@ -59,11 +74,13 @@ export default function PatientDashboard() {
       })
       toast.success('Appointment cancelled')
     } catch (cancelError) {
+      if (isAuthSessionError(cancelError)) return
       toast.error(cancelError.message || 'Unable to cancel appointment')
     }
   }
 
   const onUploadReport = async (file) => {
+    setUploadingReport(true)
     try {
       const report = await uploadReport(file, patientId)
       await addActivity({
@@ -73,7 +90,10 @@ export default function PatientDashboard() {
       })
       toast.success('Report uploaded successfully')
     } catch (uploadError) {
+      if (isAuthSessionError(uploadError)) return
       toast.error(uploadError.message || 'Unable to upload report')
+    } finally {
+      setUploadingReport(false)
     }
   }
 
@@ -105,7 +125,7 @@ export default function PatientDashboard() {
       <div className="grid gap-4 xl:grid-cols-3">
         <AdherenceProgress reminders={reminders} />
         <ActivityFeed activities={activities} />
-        <QuickActions onUpload={onUploadReport} />
+        <QuickActions onUpload={onUploadReport} doctorContacts={doctorContacts} uploading={uploadingReport} />
       </div>
     </div>
   )

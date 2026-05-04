@@ -16,7 +16,7 @@ export default function useAuth() {
     setError('')
     try {
       const token = localStorage.getItem('clinix_session_token')
-      const userId = localStorage.getItem('clinix_patient_id')
+      const userId = localStorage.getItem('clinix_user_id') || localStorage.getItem('clinix_patient_id')
       const fullName = localStorage.getItem('clinix_user_name')
       const role = localStorage.getItem('clinix_user_role')
 

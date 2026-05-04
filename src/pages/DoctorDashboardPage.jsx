@@ -15,6 +15,7 @@ import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import Skeleton from '../components/ui/Skeleton'
 import AvailabilityScheduleEditor from '../components/doctor/AvailabilityScheduleEditor'
+import ReminderComposer from '../components/doctor/ReminderComposer'
 import {
   getAppointmentSummary,
   getDoctorDashboardData,
@@ -106,7 +107,15 @@ export default function DoctorDashboardPage() {
     try {
       setActionLoadingId(`summary-${appointmentId}`)
       const data = await getAppointmentSummary(appointmentId)
-      setSelectedSummary(data.summary || null)
+      setSelectedSummary(
+        data.summary
+          ? {
+              ...data.summary,
+              history: Array.isArray(data.history) ? data.history : [],
+              previous_appointments: Array.isArray(data.previous_appointments) ? data.previous_appointments : [],
+            }
+          : null,
+      )
     } catch (error) {
       toast.error(error.message || 'Unable to load appointment summary')
     } finally {
@@ -210,6 +219,8 @@ export default function DoctorDashboardPage() {
 
           {activeView === 'dashboard' && (
             <>
+              <ReminderComposer patients={patients} onCreated={() => loadDashboard({ silent: true })} />
+
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <StatCard
                   icon={CalendarCheck2}
@@ -325,16 +336,13 @@ export default function DoctorDashboardPage() {
                                 <p className="text-sm font-semibold text-textPrimary">{notification.title}</p>
                                 <p className="text-xs text-textSecondary">{notification.message}</p>
                               </div>
-                              {!notification.is_read && !notification.generated && (
+                              {!notification.is_read && (
                                 <button
                                   className="text-xs font-semibold text-primary hover:text-deepPink"
                                   onClick={() => onMarkNotificationRead(notification.notification_id)}
                                 >
                                   Mark read
                                 </button>
-                              )}
-                              {notification.generated && (
-                                <span className="text-[10px] uppercase tracking-wide text-amber-700">Auto</span>
                               )}
                             </div>
                           </div>
@@ -356,6 +364,33 @@ export default function DoctorDashboardPage() {
                         <p><span className="font-semibold">Visit:</span> {selectedSummary.appointment_date} {selectedSummary.appointment_time}</p>
                         <p><span className="font-semibold">Reason:</span> {selectedSummary.consultation_reason || 'N/A'}</p>
                         <p><span className="font-semibold">Medical History:</span> {selectedSummary.medical_history || 'Not available'}</p>
+
+                        {Array.isArray(selectedSummary.history) && selectedSummary.history.length > 0 && (
+                          <div className="rounded-lg bg-rose-50 p-2">
+                            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-textSecondary">Recent Activity</p>
+                            <ul className="space-y-1">
+                              {selectedSummary.history.slice(0, 5).map((item) => (
+                                <li key={item.activity_id || `${item.activity_time}-${item.description}`} className="text-xs text-textSecondary">
+                                  <span className="font-semibold text-textPrimary">{item.activity_type}:</span>{' '}
+                                  {item.description}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {Array.isArray(selectedSummary.previous_appointments) && selectedSummary.previous_appointments.length > 0 && (
+                          <div className="rounded-lg bg-rose-50 p-2">
+                            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-textSecondary">Previous Appointments</p>
+                            <ul className="space-y-1">
+                              {selectedSummary.previous_appointments.slice(0, 5).map((item) => (
+                                <li key={item.appointment_id} className="text-xs text-textSecondary">
+                                  {new Date(item.appointment_date).toLocaleDateString()} {item.appointment_time} - {item.status}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
                       </div>
                     )}
                   </Card>

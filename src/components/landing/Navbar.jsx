@@ -40,7 +40,7 @@ export default function Navbar() {
     if (openProfile && profileButtonRef.current) {
       const rect = profileButtonRef.current.getBoundingClientRect()
       setDropdownPos({
-        top: rect.top - 180,
+        top: rect.bottom + 12,
         right: window.innerWidth - rect.right,
       })
     }

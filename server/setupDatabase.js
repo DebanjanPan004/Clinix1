@@ -86,10 +86,33 @@ async function ensureDoctorAvailabilityColumn() {
   }
 }
 
+async function ensureMedicineReminderColumns() {
+  const appPool = new Pool({
+    host: DB_HOST,
+    port: DB_PORT,
+    user: DB_USER,
+    password: DB_PASSWORD,
+    database: DB_NAME,
+  })
+
+  try {
+    await appPool.query(`alter table if exists public.medicine_reminders add column if not exists quantity text`)
+    await appPool.query(`alter table if exists public.medicine_reminders add column if not exists total_days int`)
+    await appPool.query(`alter table if exists public.medicine_reminders add column if not exists duration text`)
+    await appPool.query(`alter table if exists public.medicine_reminders add column if not exists notes text`)
+    await appPool.query(`alter table if exists public.medicine_reminders add column if not exists created_by_role text default 'patient'`)
+    await appPool.query(`alter table if exists public.medicine_reminders add column if not exists created_by_user_id uuid`)
+    await appPool.query(`alter table if exists public.medicine_reminders add column if not exists created_at timestamptz default now()`)
+  } finally {
+    await appPool.end()
+  }
+}
+
 async function main() {
   await ensureDatabase()
   await applySchema()
   await ensureDoctorAvailabilityColumn()
+  await ensureMedicineReminderColumns()
   console.log('PostgreSQL setup complete.')
 }
 

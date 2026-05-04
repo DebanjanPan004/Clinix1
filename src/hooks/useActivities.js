@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { createActivity, getRecentActivities } from '../services/activityService'
+import { isAuthSessionError } from '../utils/authSession'
 
 export default function useActivities(userId) {
   const [activities, setActivities] = useState([])
@@ -19,6 +20,7 @@ export default function useActivities(userId) {
       const data = await getRecentActivities(userId)
       setActivities(data)
     } catch (err) {
+      if (isAuthSessionError(err)) return
       setError(err.message || 'Unable to load activities')
     } finally {
       setLoading(false)

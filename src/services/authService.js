@@ -1,27 +1,5 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
-
-async function apiRequest(path, { method = 'GET', body, auth = false } = {}) {
-  const headers = { 'Content-Type': 'application/json' }
-  if (auth) {
-    const token = localStorage.getItem('clinix_session_token')
-    if (token) headers.Authorization = `Bearer ${token}`
-  }
-
-  const response = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  })
-
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    const error = new Error(payload?.message || `Request failed with status ${response.status}`)
-    error.status = response.status
-    throw error
-  }
-
-  return payload
-}
+import { apiRequest } from './apiClient'
+import { clearClinixSession } from '../utils/authSession'
 
 function parseRetryAfterSeconds(message) {
   const matchedSeconds = message.match(/(\d+)\s*seconds?/i)
@@ -93,11 +71,5 @@ export async function logout() {
     }
   }
 
-  localStorage.removeItem('clinix_session_token')
-  localStorage.removeItem('clinix_pending_email')
-  localStorage.removeItem('clinix_pending_role')
-  localStorage.removeItem('clinix_remember_me')
-  localStorage.removeItem('clinix_patient_id')
-  localStorage.removeItem('clinix_user_name')
-  localStorage.removeItem('clinix_user_role')
+  clearClinixSession()
 }

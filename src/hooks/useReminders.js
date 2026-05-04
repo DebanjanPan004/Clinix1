@@ -4,6 +4,7 @@ import {
   getReminders,
   toggleReminderStatus,
 } from '../services/reminderService'
+import { isAuthSessionError } from '../utils/authSession'
 
 export default function useReminders(userId) {
   const [reminders, setReminders] = useState([])
@@ -23,6 +24,7 @@ export default function useReminders(userId) {
       const data = await getReminders(userId)
       setReminders(data)
     } catch (err) {
+      if (isAuthSessionError(err)) return
       setError(err.message || 'Unable to load reminders')
     } finally {
       setLoading(false)

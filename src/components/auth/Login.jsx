@@ -65,6 +65,7 @@ export default function Login() {
       localStorage.removeItem('clinix_pending_role')
       localStorage.setItem('clinix_remember_me', String(formData.rememberMe))
       const resolvedRole = response.user?.user_metadata?.role || formData.role
+      localStorage.setItem('clinix_user_id', response.user?.id || '')
       if (resolvedRole === 'patient') {
         localStorage.setItem('clinix_patient_id', response.user?.id || 'demo-user-id')
       } else {

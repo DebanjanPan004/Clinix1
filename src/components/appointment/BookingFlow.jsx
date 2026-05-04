@@ -15,6 +15,7 @@ import {
   createAppointment,
   getAllowedVisitTypes,
 } from '../../services/appointmentService'
+import { isAuthSessionError } from '../../utils/authSession'
 
 export default function BookingFlow({ patientId, onBookingComplete, onCancel }) {
   // UI State
@@ -46,7 +47,8 @@ export default function BookingFlow({ patientId, onBookingComplete, onCancel }) 
           ? await searchDoctors(searchQuery)
           : await getAvailableDoctors()
         setDoctors(data)
-      } catch {
+      } catch (error) {
+        if (isAuthSessionError(error)) return
         toast.error('Unable to load doctors')
         setDoctors([])
       } finally {
@@ -111,6 +113,7 @@ export default function BookingFlow({ patientId, onBookingComplete, onCancel }) 
         onBookingComplete?.(appointment)
       }, 1500)
     } catch (error) {
+      if (isAuthSessionError(error)) return
       setConfirmationError(error.message || 'Unable to book appointment')
       toast.error(error.message || 'Unable to book appointment')
     } finally {

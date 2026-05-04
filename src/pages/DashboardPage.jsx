@@ -16,6 +16,8 @@ import useAppointments from '../hooks/useAppointments'
 import useReminders from '../hooks/useReminders'
 import useActivities from '../hooks/useActivities'
 import { uploadReport, listReports } from '../services/reportService'
+import { getPatientProfile, updatePatientProfile } from '../services/profileService'
+import { isAuthSessionError } from '../utils/authSession'
 
 function AppointmentsSection({ patientId }) {
   const {
@@ -73,6 +75,7 @@ function AppointmentsSection({ patientId }) {
             await removeAppointment(appointmentId)
             toast.success('Appointment cancelled')
           } catch (error) {
+            if (isAuthSessionError(error)) return
             toast.error(error.message || 'Unable to cancel appointment')
           }
         }}
@@ -94,6 +97,21 @@ function ReportsSection({ patientId }) {
   const [reports, setReports] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [uploadingReport, setUploadingReport] = useState(false)
+  const { appointments } = useAppointments(patientId)
+
+  const doctorContacts = useMemo(() => (
+    appointments
+      .map((appointment) => ({
+        name: appointment.doctor_name,
+        email: appointment.doctor_email,
+        phone: appointment.doctor_phone,
+      }))
+      .filter((contact, index, list) => {
+        const key = `${contact.email || ''}-${contact.phone || ''}-${contact.name || ''}`
+        return key !== '--' && list.findIndex((item) => `${item.email || ''}-${item.phone || ''}-${item.name || ''}` === key) === index
+      })
+  ), [appointments])
 
   const loadReports = useCallback(async () => {
     if (!patientId) {
@@ -108,6 +126,7 @@ function ReportsSection({ patientId }) {
       const data = await listReports(patientId)
       setReports(data)
     } catch (err) {
+      if (isAuthSessionError(err)) return
       setError(err.message || 'Unable to load reports')
     } finally {
       setLoading(false)
@@ -119,18 +138,22 @@ function ReportsSection({ patientId }) {
   }, [loadReports])
 
   const onUpload = async (file) => {
+    setUploadingReport(true)
     try {
       await uploadReport(file, patientId)
       toast.success('Report uploaded successfully')
       await loadReports()
     } catch (err) {
+      if (isAuthSessionError(err)) return
       toast.error(err.message || 'Unable to upload report')
+    } finally {
+      setUploadingReport(false)
     }
   }
 
   return (
     <div className="space-y-4">
-      <QuickActions onUpload={onUpload} />
+      <QuickActions onUpload={onUpload} doctorContacts={doctorContacts} uploading={uploadingReport} />
 
       <Card>
         <h3 className="mb-3 font-semibold text-textPrimary">Uploaded Reports</h3>
@@ -170,8 +193,29 @@ function ReportsSection({ patientId }) {
 function SettingsSection() {
   const [name, setName] = useState(localStorage.getItem('clinix_user_name') || '')
   const [role] = useState(localStorage.getItem('clinix_user_role') || 'patient')
+  const [phone, setPhone] = useState('')
   const [profileImage, setProfileImage] = useState(localStorage.getItem('clinix_profile_image') || '')
   const [previewImage, setPreviewImage] = useState(profileImage)
+  const [loadingProfile, setLoadingProfile] = useState(true)
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      setLoadingProfile(true)
+      try {
+        const profile = await getPatientProfile()
+        setName(profile.full_name || '')
+        setPhone(profile.phone || '')
+        localStorage.setItem('clinix_user_name', profile.full_name || 'Patient')
+      } catch (error) {
+        if (isAuthSessionError(error)) return
+        toast.error(error.message || 'Unable to load profile')
+      } finally {
+        setLoadingProfile(false)
+      }
+    }
+
+    loadProfile()
+  }, [])
 
   const handleImageUpload = (e) => {
     const file = e.target.files?.[0]
@@ -188,9 +232,23 @@ function SettingsSection() {
     reader.readAsDataURL(file)
   }
 
-  const onSave = () => {
-    localStorage.setItem('clinix_user_name', name || 'Patient')
-    toast.success('Profile preferences saved')
+  const onSave = async () => {
+    try {
+      const updated = await updatePatientProfile({
+        fullName: name || 'Patient',
+        phone,
+      })
+
+      localStorage.setItem('clinix_user_name', updated.full_name || 'Patient')
+      toast.success('Profile updated successfully')
+    } catch (error) {
+      if (isAuthSessionError(error)) return
+      toast.error(error.message || 'Unable to save profile')
+    }
+  }
+
+  if (loadingProfile) {
+    return <Skeleton className="h-64" />
   }
 
   return (
@@ -231,6 +289,15 @@ function SettingsSection() {
           onChange={(e) => setName(e.target.value)}
           className="w-full rounded-xl border border-rose-200 px-3 py-2.5 focus:border-primary focus:outline-none"
           placeholder="Enter your name"
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-sm text-textSecondary">Phone</label>
+        <input
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          className="w-full rounded-xl border border-rose-200 px-3 py-2.5 focus:border-primary focus:outline-none"
+          placeholder="Enter your phone number"
         />
       </div>
       <div>

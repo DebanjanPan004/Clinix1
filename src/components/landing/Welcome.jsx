@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
+import { motion as Motion } from 'framer-motion'
 
 export default function Welcome({ onComplete }) {
   const [showText, setShowText] = useState(false)
@@ -32,7 +32,7 @@ export default function Welcome({ onComplete }) {
   }, [isExiting, onComplete])
 
   return (
-    <motion.div
+    <Motion.div
       className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden"
       initial={{ opacity: 1 }}
       animate={{ opacity: isExiting ? 0 : 1, filter: isExiting ? 'blur(8px)' : 'blur(0px)' }}
@@ -42,7 +42,7 @@ export default function Welcome({ onComplete }) {
 
       {/* Welcome content */}
       <div className="relative z-10 flex flex-col items-center justify-center text-center">
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, scale: 0.94 }}
           animate={{
             opacity: isExiting ? 0 : (showText ? 1 : 0),
@@ -52,15 +52,15 @@ export default function Welcome({ onComplete }) {
           transition={{ duration: 0.8, ease: 'easeOut' }}
           className="flex flex-col items-center gap-6"
         >
-          <motion.p
+          <Motion.p
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: showText ? 1 : 0, y: showText ? 0 : 16 }}
             transition={{ duration: 0.6, ease: 'easeOut' }}
             className="font-display text-sm font-semibold uppercase tracking-[0.35em] text-white/75 md:text-base"
           >
             Welcome {userName} to
-          </motion.p>
-          <motion.h2
+          </Motion.p>
+          <Motion.h2
             initial={{ opacity: 0, y: 22, scale: 0.96 }}
             animate={{ opacity: showText ? 1 : 0, y: showText ? 0 : 22 }}
             transition={{ duration: 0.85, ease: 'easeOut', delay: showText ? 0.12 : 0 }}
@@ -73,18 +73,18 @@ export default function Welcome({ onComplete }) {
           >
             <span className="text-white">Clinix</span>
             <span className="text-primary">One</span>
-          </motion.h2>
+          </Motion.h2>
 
-          <motion.p
+          <Motion.p
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: showText ? 1 : 0, y: showText ? 0 : 8 }}
             transition={{ duration: 0.7, delay: showText ? 0.34 : 0 }}
             className="mt-4 text-lg text-white/60 md:text-xl"
           >
             The Future of Healthcare
-          </motion.p>
+          </Motion.p>
 
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: showText ? 1 : 0 }}
             transition={{ duration: 0.7, delay: showText ? 0.5 : 0 }}
@@ -92,7 +92,7 @@ export default function Welcome({ onComplete }) {
           >
             <div className="flex items-center justify-center gap-1">
               {[0, 1, 2].map((i) => (
-                <motion.div
+                <Motion.div
                   key={i}
                   className="h-2 w-2 rounded-full bg-primary"
                   animate={{ opacity: [0.3, 1, 0.3] }}
@@ -100,9 +100,9 @@ export default function Welcome({ onComplete }) {
                 />
               ))}
             </div>
-          </motion.div>
-        </motion.div>
+          </Motion.div>
+        </Motion.div>
       </div>
-    </motion.div>
+    </Motion.div>
   )
 }

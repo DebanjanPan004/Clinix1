@@ -53,7 +53,14 @@ create table if not exists public.medicine_reminders (
   medicine_name text not null,
   dosage text not null,
   reminder_time time not null,
-  status text not null default 'pending'
+  quantity text,
+  total_days int,
+  duration text,
+  notes text,
+  status text not null default 'pending',
+  created_by_role text not null default 'patient',
+  created_by_user_id uuid references public.users(user_id),
+  created_at timestamptz not null default now()
 );
 
 create table if not exists public.activities (

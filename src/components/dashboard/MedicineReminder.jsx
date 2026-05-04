@@ -2,11 +2,24 @@ import { BellRing } from 'lucide-react'
 import Card from '../ui/Card'
 
 export default function MedicineReminder({ reminder, onToggle }) {
+  const formatDuration = () => {
+    if (reminder.duration) return reminder.duration
+    if (reminder.total_days) return `${reminder.total_days} days`
+    return ''
+  }
+
   return (
     <Card className="flex items-center justify-between gap-4">
       <div>
         <h3 className="font-semibold text-textPrimary">{reminder.medicine_name}</h3>
         <p className="text-sm text-textSecondary">{reminder.dosage}</p>
+        {(reminder.quantity || reminder.total_days || reminder.duration || reminder.notes) && (
+          <div className="mt-1 space-y-0.5 text-xs text-textSecondary">
+            {reminder.quantity && <p>Quantity: {reminder.quantity}</p>}
+            {formatDuration() && <p>Duration: {formatDuration()}</p>}
+            {reminder.notes && <p>{reminder.notes}</p>}
+          </div>
+        )}
         <p className="mt-1 flex items-center gap-2 text-xs text-primary">
           <BellRing size={14} /> {reminder.reminder_time}
         </p>

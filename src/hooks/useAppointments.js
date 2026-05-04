@@ -4,6 +4,7 @@ import {
   createAppointment,
   getUpcomingAppointments,
 } from '../services/appointmentService'
+import { isAuthSessionError } from '../utils/authSession'
 
 export default function useAppointments(userId) {
   const [appointments, setAppointments] = useState([])
@@ -23,6 +24,7 @@ export default function useAppointments(userId) {
       const data = await getUpcomingAppointments(userId)
       setAppointments(data)
     } catch (err) {
+      if (isAuthSessionError(err)) return
       setError(err.message || 'Unable to load appointments')
     } finally {
       setLoading(false)

@@ -39,7 +39,24 @@ const storage = multer.diskStorage({
     cb(null, `${Date.now()}-${safeName}`)
   },
 })
-const upload = multer({ storage })
+const allowedUploadMimeTypes = new Set(['application/pdf', 'image/jpeg', 'image/png'])
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 2 * 1024 * 1024,
+  },
+  fileFilter: (_req, file, cb) => {
+    if (allowedUploadMimeTypes.has(String(file.mimetype || '').toLowerCase())) {
+      cb(null, true)
+      return
+    }
+
+    const invalidTypeError = new Error('Only PDF, JPG, and PNG files are allowed')
+    invalidTypeError.code = 'INVALID_FILE_TYPE'
+    invalidTypeError.status = 400
+    cb(invalidTypeError)
+  },
+})
 
 const allowedOrigins = [
   process.env.FRONTEND_ORIGIN || 'http://localhost:5173',
@@ -774,6 +791,10 @@ app.get('/api/patient/appointments', authRequired, async (req, res) => {
   const patientId = (req.query.patient_id || req.auth.userId || '').toString()
   if (!patientId) return res.status(400).json({ message: 'patient_id is required' })
 
+  if (patientId !== req.auth.userId) {
+    return res.status(403).json({ message: 'You can only access your own appointments' })
+  }
+
   try {
     const result = await pool.query(
       `select a.appointment_id,
@@ -787,9 +808,12 @@ app.get('/api/patient/appointments', authRequired, async (req, res) => {
               a.consultation_fee,
               a.created_at,
               d.name as doctor_name,
-              d.specialization as doctor_specialization
+              d.specialization as doctor_specialization,
+              du.email as doctor_email,
+              du.phone as doctor_phone
        from public.appointments a
        left join public.doctors d on d.doctor_id = a.doctor_id
+            left join public.users du on du.user_id = a.doctor_id
        where a.patient_id = $1 and a.appointment_date >= current_date
        order by a.appointment_date asc, a.appointment_time asc`,
       [patientId]
@@ -816,6 +840,10 @@ app.post('/api/patient/appointments', authRequired, async (req, res) => {
 
   if (!patient_id || !doctor_id || !appointment_date || !appointment_time) {
     return res.status(400).json({ message: 'Missing required appointment fields' })
+  }
+
+  if (patient_id !== req.auth.userId) {
+    return res.status(403).json({ message: 'You can only create appointments for your own account' })
   }
 
   try {
@@ -894,13 +922,13 @@ app.patch('/api/patient/appointments/:appointmentId/cancel', authRequired, async
     const result = await pool.query(
       `update public.appointments
        set status = 'cancelled', updated_at = now()
-       where appointment_id = $1
+       where appointment_id = $1 and patient_id = $2
        returning appointment_id, status`,
-      [appointmentId]
+      [appointmentId, req.auth.userId]
     )
 
     if (result.rowCount === 0) {
-      return res.status(404).json({ message: 'Appointment not found' })
+      return res.status(404).json({ message: 'Appointment not found for this patient' })
     }
 
     return res.json({ appointment: result.rows[0] })
@@ -913,14 +941,18 @@ app.get('/api/patient/reminders', authRequired, async (req, res) => {
   const patientId = (req.query.patient_id || req.auth.userId || '').toString()
   if (!patientId) return res.status(400).json({ message: 'patient_id is required' })
 
+  if (patientId !== req.auth.userId) {
+    return res.status(403).json({ message: 'You can only access your own reminders' })
+  }
+
   try {
     const result = await pool.query(
-      `select reminder_id, patient_id, medicine_name, dosage,
+      `select reminder_id, patient_id, medicine_name, dosage, quantity, total_days, duration, notes,
               to_char(reminder_time, 'HH24:MI') as reminder_time,
-              status
+              status, created_by_role, created_by_user_id, created_at
        from public.medicine_reminders
        where patient_id = $1
-       order by reminder_time asc`,
+       order by created_at desc, reminder_time asc`,
       [patientId]
     )
 
@@ -931,21 +963,114 @@ app.get('/api/patient/reminders', authRequired, async (req, res) => {
 })
 
 app.post('/api/patient/reminders', authRequired, async (req, res) => {
-  const { patient_id, medicine_name, dosage, reminder_time, status } = req.body || {}
+  const { patient_id, medicine_name, dosage, reminder_time, quantity, total_days, duration, notes, status } = req.body || {}
+  if (!patient_id || !medicine_name || !dosage || !reminder_time) {
+    return res.status(400).json({ message: 'Missing reminder fields' })
+  }
+
+  if (patient_id !== req.auth.userId) {
+    return res.status(403).json({ message: 'You can only create reminders for your own account' })
+  }
+
+  try {
+    const result = await pool.query(
+      `insert into public.medicine_reminders(
+         patient_id, medicine_name, dosage, reminder_time,
+         quantity, total_days, duration, notes,
+         status, created_by_role, created_by_user_id
+       )
+       values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       returning reminder_id, patient_id, medicine_name, dosage, quantity, total_days, duration, notes,
+                 to_char(reminder_time, 'HH24:MI') as reminder_time, status, created_by_role, created_by_user_id, created_at`,
+      [
+        patient_id,
+        medicine_name,
+        dosage,
+        reminder_time,
+        quantity || null,
+        Number.isFinite(Number(total_days)) ? Number(total_days) : null,
+        duration || null,
+        notes || null,
+        status || 'pending',
+        req.auth.role || 'patient',
+        req.auth.userId,
+      ]
+    )
+
+    return res.status(201).json({ reminder: result.rows[0] })
+  } catch (error) {
+    return res.status(500).json({ message: error.message })
+  }
+})
+
+app.post('/api/doctor/reminders', authRequired, roleRequired(['doctor']), async (req, res) => {
+  const {
+    patient_id,
+    medicine_name,
+    dosage,
+    reminder_time,
+    quantity,
+    total_days,
+    duration,
+    notes,
+    status,
+  } = req.body || {}
+
   if (!patient_id || !medicine_name || !dosage || !reminder_time) {
     return res.status(400).json({ message: 'Missing reminder fields' })
   }
 
   try {
-    const result = await pool.query(
-      `insert into public.medicine_reminders(patient_id, medicine_name, dosage, reminder_time, status)
-       values($1,$2,$3,$4,$5)
-       returning reminder_id, patient_id, medicine_name, dosage,
-                 to_char(reminder_time, 'HH24:MI') as reminder_time, status`,
-      [patient_id, medicine_name, dosage, reminder_time, status || 'pending']
+    const patientResult = await pool.query(
+      'select user_id, name from public.users where user_id = $1 and role = $2',
+      [patient_id, 'patient']
     )
 
-    return res.status(201).json({ reminder: result.rows[0] })
+    if (patientResult.rowCount === 0) {
+      return res.status(404).json({ message: 'Patient not found' })
+    }
+
+    const inserted = await pool.query(
+      `insert into public.medicine_reminders(
+         patient_id, medicine_name, dosage, reminder_time,
+         quantity, total_days, duration, notes,
+         status, created_by_role, created_by_user_id
+       )
+       values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       returning reminder_id, patient_id, medicine_name, dosage, quantity, total_days, duration, notes,
+                 to_char(reminder_time, 'HH24:MI') as reminder_time, status, created_by_role, created_by_user_id, created_at`,
+      [
+        patient_id,
+        medicine_name,
+        dosage,
+        reminder_time,
+        quantity || null,
+        Number.isFinite(Number(total_days)) ? Number(total_days) : null,
+        duration || null,
+        notes || null,
+        status || 'pending',
+        'doctor',
+        req.auth.userId,
+      ]
+    )
+
+    await pool.query(
+      `insert into public.activities(patient_id, activity_type, description)
+       values($1, 'medicine reminder created', $2)`,
+      [patient_id, `A doctor created a medicine reminder for ${medicine_name}`]
+    )
+
+    await pool.query(
+      `insert into public.doctor_notifications(doctor_id, title, message, type, is_read)
+       values($1, $2, $3, 'action', false)`,
+      [
+        req.auth.userId,
+        'Medicine reminder created',
+        `Reminder created for ${patientResult.rows[0].name}: ${medicine_name}`,
+      ]
+    )
+
+    return res.status(201).json({ reminder: inserted.rows[0] })
   } catch (error) {
     return res.status(500).json({ message: error.message })
   }
@@ -961,13 +1086,13 @@ app.patch('/api/patient/reminders/:reminderId/status', authRequired, async (req,
     const result = await pool.query(
       `update public.medicine_reminders
        set status = $1
-       where reminder_id = $2
+       where reminder_id = $2 and patient_id = $3
        returning reminder_id, status`,
-      [status, reminderId]
+      [status, reminderId, req.auth.userId]
     )
 
     if (result.rowCount === 0) {
-      return res.status(404).json({ message: 'Reminder not found' })
+      return res.status(404).json({ message: 'Reminder not found for this patient' })
     }
 
     return res.json({ reminder: result.rows[0] })
@@ -981,6 +1106,10 @@ app.get('/api/patient/activities', authRequired, async (req, res) => {
   const limit = Number(req.query.limit || 10)
 
   if (!patientId) return res.status(400).json({ message: 'patient_id is required' })
+
+  if (patientId !== req.auth.userId) {
+    return res.status(403).json({ message: 'You can only access your own activities' })
+  }
 
   try {
     const result = await pool.query(
@@ -1004,6 +1133,10 @@ app.post('/api/patient/activities', authRequired, async (req, res) => {
     return res.status(400).json({ message: 'Missing activity fields' })
   }
 
+  if (patient_id !== req.auth.userId) {
+    return res.status(403).json({ message: 'You can only create your own activities' })
+  }
+
   try {
     const result = await pool.query(
       `insert into public.activities(patient_id, activity_type, description)
@@ -1021,6 +1154,10 @@ app.post('/api/patient/activities', authRequired, async (req, res) => {
 app.get('/api/patient/reports', authRequired, async (req, res) => {
   const userId = (req.query.userId || req.auth.userId || '').toString()
   if (!userId) return res.status(400).json({ message: 'userId is required' })
+
+  if (userId !== req.auth.userId) {
+    return res.status(403).json({ message: 'You can only access your own reports' })
+  }
 
   try {
     const result = await pool.query(
@@ -1100,7 +1237,16 @@ app.get('/api/doctor/dashboard', authRequired, roleRequired(['doctor']), async (
         : 999
 
       const appointmentHour = Number((appointment.appointment_time || '00:00').split(':')[0])
-      const hasRecentLabResult = Math.random() > 0.45
+      const recentLabResult = await pool.query(
+        `select exists(
+            select 1
+            from public.medical_reports
+            where patient_id = $1
+              and created_at >= now() - interval '180 days'
+         ) as has_recent_lab_result`,
+        [appointment.patient_id]
+      )
+      const hasRecentLabResult = Boolean(recentLabResult.rows[0]?.has_recent_lab_result)
 
       const appointmentScheduleCheck = doctorCanBookAppointment(
         doctorSchedule,
@@ -1131,20 +1277,6 @@ app.get('/api/doctor/dashboard', authRequired, roleRequired(['doctor']), async (
       [doctorId]
     )
 
-    const generatedNotificationsResult = await pool.query(
-      `select mr.report_id,
-              mr.created_at,
-              u.name as patient_name
-       from public.medical_reports mr
-       join public.users u on u.user_id = mr.patient_id
-       where mr.patient_id in (
-         select distinct patient_id from public.appointments where doctor_id = $1
-       )
-       order by mr.created_at desc
-       limit 3`,
-      [doctorId]
-    )
-
     const patientListResult = await pool.query(
       `select distinct a.patient_id, u.name as patient_name, u.phone as patient_phone
        from public.appointments a
@@ -1163,19 +1295,7 @@ app.get('/api/doctor/dashboard', authRequired, roleRequired(['doctor']), async (
       return dateValue === todayKey
     }).length
 
-    const generatedNotifications = generatedNotificationsResult.rows.map((row) => ({
-      notification_id: `lab-${row.report_id}`,
-      title: 'New lab result received',
-      message: `Lab report uploaded for ${row.patient_name}`,
-      type: 'lab',
-      is_read: false,
-      created_at: row.created_at,
-      generated: true,
-    }))
-
-    const notifications = [...generatedNotifications, ...notificationsResult.rows]
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      .slice(0, 10)
+    const notifications = notificationsResult.rows
 
     return res.json({
       summary: {
@@ -1269,7 +1389,107 @@ app.get('/api/doctor/appointments/:appointmentId/summary', authRequired, roleReq
       return res.status(404).json({ message: 'Appointment not found for this doctor' })
     }
 
-    return res.json({ summary: result.rows[0] })
+    const summary = result.rows[0]
+
+    const historyResult = await pool.query(
+      `select activity_id,
+              activity_type,
+              description,
+              activity_time
+       from public.activities
+       where patient_id = $1
+       order by activity_time desc
+       limit 20`,
+      [summary.patient_id]
+    )
+
+    const previousAppointments = await pool.query(
+      `select appointment_id,
+              appointment_date,
+              to_char(appointment_time, 'HH24:MI') as appointment_time,
+              status,
+              visit_type
+       from public.appointments
+       where patient_id = $1
+         and doctor_id = $2
+         and appointment_id <> $3
+       order by appointment_date desc, appointment_time desc
+       limit 10`,
+      [summary.patient_id, doctorId, appointmentId]
+    )
+
+    return res.json({
+      summary,
+      history: historyResult.rows,
+      previous_appointments: previousAppointments.rows,
+    })
+  } catch (error) {
+    return res.status(500).json({ message: error.message })
+  }
+})
+
+app.get('/api/patient/profile', authRequired, roleRequired(['patient']), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `select user_id, name, email, phone, role, created_at
+       from public.users
+       where user_id = $1`,
+      [req.auth.userId]
+    )
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'Profile not found' })
+    }
+
+    const row = result.rows[0]
+    return res.json({
+      profile: {
+        id: row.user_id,
+        full_name: row.name,
+        email: row.email,
+        phone: row.phone,
+        role: row.role,
+        created_at: row.created_at,
+      },
+    })
+  } catch (error) {
+    return res.status(500).json({ message: error.message })
+  }
+})
+
+app.patch('/api/patient/profile', authRequired, roleRequired(['patient']), async (req, res) => {
+  const fullName = String(req.body?.full_name || req.body?.fullName || '').trim()
+  const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : null
+
+  if (!fullName) {
+    return res.status(400).json({ message: 'full_name is required' })
+  }
+
+  try {
+    const result = await pool.query(
+      `update public.users
+       set name = $1,
+           phone = $2
+       where user_id = $3
+       returning user_id, name, email, phone, role, created_at`,
+      [fullName, phone || null, req.auth.userId]
+    )
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'Profile not found' })
+    }
+
+    const row = result.rows[0]
+    return res.json({
+      profile: {
+        id: row.user_id,
+        full_name: row.name,
+        email: row.email,
+        phone: row.phone,
+        role: row.role,
+        created_at: row.created_at,
+      },
+    })
   } catch (error) {
     return res.status(500).json({ message: error.message })
   }
@@ -1836,6 +2056,10 @@ app.post('/api/patient/reports', authRequired, upload.single('file'), async (req
   if (!userId) return res.status(400).json({ message: 'userId is required' })
   if (!req.file) return res.status(400).json({ message: 'file is required' })
 
+  if (userId !== req.auth.userId) {
+    return res.status(403).json({ message: 'You can only upload reports for your own account' })
+  }
+
   try {
     const insertResult = await pool.query(
       `insert into public.medical_reports(patient_id, file_name, file_path, mime_type)
@@ -1846,6 +2070,32 @@ app.post('/api/patient/reports', authRequired, upload.single('file'), async (req
 
     const baseUrl = `${req.protocol}://${req.get('host')}`
     const row = insertResult.rows[0]
+
+    const doctorsForPatientResult = await pool.query(
+      `select distinct a.doctor_id, u.name as doctor_name
+       from public.appointments a
+       join public.users u on u.user_id = a.doctor_id
+       where a.patient_id = $1`,
+      [userId]
+    )
+
+    const patientNameResult = await pool.query(
+      'select name from public.users where user_id = $1',
+      [userId]
+    )
+
+    const patientName = patientNameResult.rows[0]?.name || 'a patient'
+    for (const doctorRow of doctorsForPatientResult.rows) {
+      await pool.query(
+        `insert into public.doctor_notifications(doctor_id, title, message, type, is_read)
+         values($1, $2, $3, 'report', false)`,
+        [
+          doctorRow.doctor_id,
+          'New lab result received',
+          `Lab report uploaded by ${patientName}: ${row.file_name}`,
+        ]
+      )
+    }
 
     return res.status(201).json({
       report: {
@@ -1864,6 +2114,19 @@ app.post('/api/patient/reports', authRequired, upload.single('file'), async (req
 
 app.use((err, _req, res, next) => {
   void next
+
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ message: 'File size must be 2MB or less' })
+    }
+
+    return res.status(400).json({ message: err.message || 'File upload failed' })
+  }
+
+  if (err?.code === 'INVALID_FILE_TYPE') {
+    return res.status(400).json({ message: err.message || 'Invalid file type' })
+  }
+
   return res.status(500).json({ message: err?.message || 'Internal server error' })
 })
 

@@ -1,37 +1,28 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
+import { apiRequest } from './apiClient'
+
+const MAX_REPORT_SIZE_BYTES = 2 * 1024 * 1024
+const ALLOWED_REPORT_MIME_TYPES = [
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+]
 
 function sanitizeName(name) {
   return name.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9._-]/g, '').toLowerCase()
 }
 
-async function apiRequest(path, { method = 'GET', body, auth = false } = {}) {
-  const headers = {}
-  if (auth) {
-    const token = localStorage.getItem('clinix_session_token')
-    if (token) headers.Authorization = `Bearer ${token}`
-  }
-
-  const isFormData = body instanceof FormData
-  if (!isFormData) headers['Content-Type'] = 'application/json'
-
-  const response = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers,
-    body: body ? (isFormData ? body : JSON.stringify(body)) : undefined,
-  })
-
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    const error = new Error(payload?.message || `Request failed with status ${response.status}`)
-    error.status = response.status
-    throw error
-  }
-
-  return payload
-}
-
 export async function uploadReport(file, userId) {
   if (!file) throw new Error('Please select a file to upload')
+  if (!userId) throw new Error('Missing patient account information. Please login again.')
+
+  const mimeType = String(file.type || '').toLowerCase()
+  if (!ALLOWED_REPORT_MIME_TYPES.includes(mimeType)) {
+    throw new Error('Only PDF, JPG, and PNG files are allowed')
+  }
+
+  if (file.size > MAX_REPORT_SIZE_BYTES) {
+    throw new Error('File size must be 2MB or less')
+  }
 
   const formData = new FormData()
   formData.append('file', file, `${Date.now()}-${sanitizeName(file.name)}`)
